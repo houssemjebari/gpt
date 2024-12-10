@@ -16,7 +16,7 @@ class GPTConfig:
 
 class MLP(nn.Module):
 
-    def __init(self, config):
+    def __init__(self, config):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, config.n_embd * 4)
         self.gelu = nn.GELU(approximate='tanh')
