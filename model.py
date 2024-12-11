@@ -33,7 +33,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        assert (config.n_embd // config.n_head) == 0
+        assert (config.n_embd % config.n_head) == 0
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
         self.n_head = config.n_head
@@ -74,11 +74,11 @@ class Block(nn.Module):
 class GPT(nn.Module):
 
     def __init__(self, config):
-        super.__init__()
+        super().__init__()
         self.config = config
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(nn.block_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd),
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]), 
             ln_f = nn.LayerNorm(config.n_embd),
         ))
@@ -88,13 +88,12 @@ class GPT(nn.Module):
         B, T = x.size() # (B,T)
         assert T <= self.config.block_size, "The input sequence shouldn't be longer than {self.config.block_size} words"
         positions = torch.arange(0, T, dtype=torch.long) # (T,)
-        x = self.transformer.wte(x) + self.transformer.wpe(positions) # (B,T,n_embd) + (T,n_embd)
+        x = self.transformer.wte(x) + self.transformer.wpe(positions) # (B,T,n_embd) + (T,n_embd) -> (B,T,n_embd)
         for block in self.transformer.h:
             x = block(x)
 
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x)
-        print('logits shape: ', logits.shape)
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1,logits.size(-1)),targets.view(-1))
