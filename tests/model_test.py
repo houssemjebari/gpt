@@ -1,7 +1,9 @@
-import argparse
 import torch
-from transformers import GPT2LMHeadModel
+import tiktoken
+import argparse
+import torch.nn.functional as F
 from model import GPT, GPTConfig
+from transformers import GPT2LMHeadModel, pipeline, set_seed
 
 def load_and_compare_weights(model_type):
     print(f'GPT Model Test: Loading weights from pretrained {model_type}')
@@ -52,6 +54,41 @@ def load_and_compare_weights(model_type):
     # If we made it here then the test passed
     print(f"Successfully loaded weights for {model_type}. Test passed!")
 
+    # --------------------------------------------------------------------------------------------------------------------
+    num_return_sequences = 5
+    max_length = 30
+    seed = 42 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model.eval()
+    model.to(device)
+    model_hf.to(device)
+    enc = tiktoken.get_encoding('gpt2')
+    tokens = enc.encode("Hello, I'm a language model,")
+    tokens = torch.tensor(tokens, dtype=torch.long) # (8,)
+    tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)  # (5,8)
+    x = tokens.to(device)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    while x.size(1) < max_length:
+        logits = model(x)[0] # (B,T,vocab_size)
+        logits_hf = model_hf(x)[0]
+        logits = logits[:, -1, :] # (B, vocab_size)
+        logits_hf = logits_hf[:, -1, :] # (B, vocab_size)
+        assert torch.allclose(logits, logits_hf, atol=1e-5), "Logits are not equal within tolerance!" 
+        probs = F.softmax(logits, dim=-1)
+        topk_probs, topk_indices = torch.topk(probs,50, dim=-1) # (B,50)
+        ix = torch.multinomial(topk_probs,1) # (B,1)
+        xcol = torch.gather(topk_indices, -1, ix) # (B,1)
+        x = torch.cat((x,xcol), dim=-1) # (B, max_length)
+    # print the generated text 
+    for i in range(num_return_sequences):
+        tokens = x[i,:].tolist()
+        decoded = enc.decode(tokens)
+        print(">", decoded)
+    print(f"Successfully Generated Sentences for {model_type} Matching the hugging face sentences. Test passed!")
+
+
+
 if __name__ == "__main__":
     # Parse arguments from command line
     parser = argparse.ArgumentParser(description="Load GPT-2 model and verify weights.")
@@ -64,3 +101,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error during weight loading: {e}")
         exit(1)  
+

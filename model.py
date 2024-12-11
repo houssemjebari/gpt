@@ -43,18 +43,18 @@ class CausalSelfAttention(nn.Module):
     
     def forward(self, x):
         B, T, C = x.size()
-        qkv = self.c_attn(x) # (B,T, 3 * n_embd)
+        qkv: torch.Tensor = self.c_attn(x) # (B,T, 3 * n_embd)
         q, k, v = qkv.split(self.n_embd, dim=2) 
         q = q.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
         k = k.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
         v = v.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
-        attn = q @ k.transpose(-2,-1) 
+        attn = q @ k.transpose(-2,-1) / math.sqrt(k.size(-1)) 
         attn = attn.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-        attn = F.softmax(attn) / math.sqrt(C) 
+        attn = F.softmax(attn, dim=-1) 
         attn = attn @ v # (B, n_head, T, C // T) @ (B, n_head, T, C // n_head)
         x = attn.transpose(1,2).contiguous().view(B,T,C)
-        x = self.c_proj(x)
-        return x 
+        y = self.c_proj(x)
+        return y 
 
 class Block(nn.Module):
 
@@ -87,7 +87,7 @@ class GPT(nn.Module):
     def forward(self, x, targets=None):
         B, T = x.size() # (B,T)
         assert T <= self.config.block_size, "The input sequence shouldn't be longer than {self.config.block_size} words"
-        positions = torch.arange(0, T, dtype=torch.long) # (T,)
+        positions = torch.arange(0, T, dtype=torch.long).to('cuda') # (T,)
         x = self.transformer.wte(x) + self.transformer.wpe(positions) # (B,T,n_embd) + (T,n_embd) -> (B,T,n_embd)
         for block in self.transformer.h:
             x = block(x)
@@ -97,4 +97,4 @@ class GPT(nn.Module):
         loss = None
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1,logits.size(-1)),targets.view(-1))
-        return x, loss
+        return logits, loss
