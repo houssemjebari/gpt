@@ -83,6 +83,9 @@ class GPT(nn.Module):
             ln_f = nn.LayerNorm(config.n_embd),
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        
+        # weight sharing: read Attention is all you need for more detail
+        self.transformer.wte.weight = self.lm_head.weight
 
     def forward(self, x, targets=None):
         B, T = x.size() # (B,T)
