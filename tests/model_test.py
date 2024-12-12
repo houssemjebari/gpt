@@ -3,9 +3,20 @@ import tiktoken
 import argparse
 import torch.nn.functional as F
 from model import GPT, GPTConfig
-from transformers import GPT2LMHeadModel, pipeline, set_seed
+from transformers import GPT2LMHeadModel
 
-def load_and_compare_weights(model_type):
+def test_gpt_model(model_type):
+    """
+    This function represents a Functional Test that loads weights from a pre-trained 
+    GPT-2 model (from Hugging Face) and compares them with the weights of a custom GPT 
+    model built from scratch. It checks whether the weights are successfully loaded 
+    and the model behaves similarly to the GPT-2 model when performing text generation.
+
+    Parameters:
+    model_type (str): The type of GPT-2 model to compare. Options include 'gpt2', 'gpt2-medium', 
+                      'gpt2-large', and 'gpt2-xl'.
+    """
+
     print(f'GPT Model Test: Loading weights from pretrained {model_type}')
 
     # Define model configurations for different types of GPT-2 models
@@ -59,14 +70,19 @@ def load_and_compare_weights(model_type):
     max_length = 30
     seed = 42 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    
+    # Start Evaluation and send Models to GPU
     model.eval()
     model.to(device)
     model_hf.to(device)
+    # Encode the input string into tokens
     enc = tiktoken.get_encoding('gpt2')
     tokens = enc.encode("Hello, I'm a language model,")
     tokens = torch.tensor(tokens, dtype=torch.long) # (8,)
     tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)  # (5,8)
     x = tokens.to(device)
+    
+    # Start The Generation Process
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     while x.size(1) < max_length:
@@ -97,7 +113,7 @@ if __name__ == "__main__":
 
     # Run the weight loading and comparison
     try:
-        load_and_compare_weights(args.model_type)
+        test_gpt_model(args.model_type)
     except Exception as e:
         print(f"Error during weight loading: {e}")
         exit(1)  
