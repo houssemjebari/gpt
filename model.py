@@ -84,8 +84,14 @@ class GPT(nn.Module):
         ))
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         
-        # weight sharing: read Attention is all you need for more detail
+        ################### Apply weight sharing: ##########################
+        # The same set of weights is used in multiple parts  of a neural network
+        # to reduce the number of parameters and potentially improve training 
+        # efficiency. In the context of transformer models, this can be 
+        # particularly useful for reducing memory usage
+        ####################################################################.
         self.transformer.wte.weight = self.lm_head.weight
+        
 
     def forward(self, x, targets=None):
         B, T = x.size() # (B,T)
