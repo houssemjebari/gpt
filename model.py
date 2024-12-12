@@ -21,7 +21,7 @@ class MLP(nn.Module):
         self.c_fc = nn.Linear(config.n_embd, config.n_embd * 4)
         self.gelu = nn.GELU(approximate='tanh')
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd)
-    
+        self.c_proj.NANOGPT_SCALE_INIT = 1
     def forward(self, x):
         x = self.c_fc(x)
         x = self.gelu(x)
@@ -36,6 +36,7 @@ class CausalSelfAttention(nn.Module):
         assert (config.n_embd % config.n_head) == 0
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj.NANO_GPT_SCALE_INIT = 1 # flag for output projection before the Layer Normalization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.register_buffer('bias', torch.tril(torch.ones(config.block_size, config.block_size))
@@ -92,6 +93,21 @@ class GPT(nn.Module):
         ####################################################################.
         self.transformer.wte.weight = self.lm_head.weight
         
+        # Apply weight initialization
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            std = 0.02
+            if hasattr(module, 'NANOGPT_SCALE_INIT'):
+                std *= (self.config.n_layer * 2) ** -0.5
+            torch.nn.init.normal_(module.weight,mean=0.,std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight,mean=0.,std=0.02)
+     
 
     def forward(self, x, targets=None):
         B, T = x.size() # (B,T)
