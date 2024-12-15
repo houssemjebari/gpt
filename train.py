@@ -29,8 +29,10 @@ if torch.cuda.is_available():
 print(f'using device: {device}')
 
 # Import the data loader 
+total_batch_size = 2**19
 batch_size = 4
 context_size = 1024
+grad_accum_steps = total_batch_size // (batch_size * context_size)   
 train_loader = DataLoader(batch_size,context_size)
 
 # Instantiate the Model
@@ -43,16 +45,20 @@ train_steps = 50
 optimizer = torch.optim.AdamW(model.parameters(),lr =3e-4, betas=(0.9, 0.95), eps=1e-8)
 for step in range(train_steps):
     t0 = time.time()
-    # Get batches and send them to the Device
-    x,y = train_loader.next_batch()
-    x, y = x.to(device), y.to(device)
     # Zero the grads before the forward pass
     optimizer.zero_grad()
-    # Compute the forward pass 
-    with torch.autocast(device_type=device, dtype=torch.bfloat16):  
-        logits, loss = model(x,y)
-    # Compute the grads
-    loss.backward()
+    loss_accum = 0.0
+    for micro_step in range(grad_accum_steps):
+        # Get batches and send them to the Device
+        x,y = train_loader.next_batch()
+        x, y = x.to(device), y.to(device)
+        # Compute the forward pass 
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):  
+            logits, loss = model(x,y)
+        loss = loss / grad_accum_steps
+        loss_accum += loss.detach()
+        # Compute the grads
+        loss.backward()
     # Clip the gradients to avoid model shock
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
     # Get the iteration learning rate 
@@ -64,7 +70,7 @@ for step in range(train_steps):
     # Performance calculation and logging
     torch.cuda.synchronize()
     step_time = time.time() - t0
-    tokens_per_sec = (batch_size * context_size) / step_time
-    print(f'step {step} | loss: {loss.item()} | lr: {lr} | norm: {norm:.4f} | dt: {step_time:.2f} ms  | tok/sec: {tokens_per_sec}')
+    tokens_per_sec = (batch_size * context_size * grad_accum_steps) / step_time
+    print(f'step {step} | loss: {loss_accum:.6f} | lr: {lr} | norm: {norm:.4f} | dt: {step_time:.2f} seconds  | tok/sec: {tokens_per_sec}')
 
 
