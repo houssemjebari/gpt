@@ -21,6 +21,6 @@ class DataLoader:
         x = buf[ :-1].view(self.B, self.T)
         y = buf[1:  ].view(self.B, self.T)
         self.current_position += self.B * self.T
-        if (self.current_position >= len(self.tokens)):
+        if (self.current_position + (self.B * self.T + 1) >= len(self.tokens)):
             self.current_position = 0
         return x,y
