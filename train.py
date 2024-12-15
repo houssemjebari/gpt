@@ -15,9 +15,11 @@ print(f'using device: {device}')
 batch_size = 4
 context_size = 1024
 train_loader = DataLoader(batch_size,context_size)
+
 # Instantiate the Model
 model = GPT(GPTConfig)
 model.to(device)
+model = torch.compile(model)
 
 # Optimize 
 train_steps = 50

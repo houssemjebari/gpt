@@ -13,6 +13,7 @@ class GPTConfig:
     n_layer:  int = 12 # number of attention block layers
     n_head: int = 12 # number of heads 
     n_embd: int = 768 # Embedding
+    flash_attn: bool = True
 
 class MLP(nn.Module):
 
@@ -41,6 +42,7 @@ class CausalSelfAttention(nn.Module):
         self.n_embd = config.n_embd
         self.register_buffer('bias', torch.tril(torch.ones(config.block_size, config.block_size))
                              .view(1,1, config.block_size, config.block_size))
+        self.flash_attn = config.flash_attn
     
     def forward(self, x):
         B, T, C = x.size()
@@ -49,10 +51,13 @@ class CausalSelfAttention(nn.Module):
         q = q.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
         k = k.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
         v = v.view(B,T,self.n_head, C // self.n_head).transpose(1,2) # (B, n_head, T, n_embd / n_head)
-        attn = q @ k.transpose(-2,-1) / math.sqrt(k.size(-1)) 
-        attn = attn.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-        attn = F.softmax(attn, dim=-1) 
-        attn = attn @ v # (B, n_head, T, C // T) @ (B, n_head, T, C // n_head)
+        if self.flash_attn: 
+            attn = F.scaled_dot_product_attention(q,k,v, is_causal=True)
+        else: 
+            attn = q @ k.transpose(-2,-1) / math.sqrt(k.size(-1)) 
+            attn = attn.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            attn = F.softmax(attn, dim=-1) 
+            attn = attn @ v # (B, n_head, T, C // T) @ (B, n_head, T, C // n_head)
         x = attn.transpose(1,2).contiguous().view(B,T,C)
         y = self.c_proj(x)
         return y 
