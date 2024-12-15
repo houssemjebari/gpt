@@ -15,7 +15,6 @@ print(f'using device: {device}')
 batch_size = 4
 context_size = 1024
 train_loader = DataLoader(batch_size,context_size)
-
 # Instantiate the Model
 model = GPT(GPTConfig)
 model.to(device)
@@ -28,7 +27,8 @@ for i in range(train_steps):
     x,y = train_loader.next_batch()
     x, y = x.to(device), y.to(device)
     optimizer.zero_grad()
-    logits, loss = model(x,y)
+    with torch.autocast(device_type=device, dtype=torch.bfloat16):  
+        logits, loss = model(x,y)
     loss.backward()
     optimizer.step()
     torch.cuda.synchronize()
