@@ -9,6 +9,27 @@ import math
 import os
 import tiktoken
 import torch.nn.functional as F
+from hellaswag import * 
+
+
+def get_most_likely_row(tokens, mask, logits):
+    # shift the logits and tokens for the autoregressive task
+    shift_logits = (logits[..., :-1, :]).contiguous()
+    shift_tokens = (tokens[..., 1:]).contiguous()
+    # flatten the logits and tokens for loss computation
+    flat_logits = shift_logits.view(-1, shift_logits.size(-1)) # (batch_size*context_window, vocab_size)
+    flat_tokens = shift_tokens.view(-1) # (batch_size*context_window, )
+    shift_losses = F.cross_entropy(flat_logits, flat_tokens, reduction='none') # (batch_size*context_window, )
+    shift_losses = shift_losses.view(tokens.size(0), -1) # (batch_size, context_window)
+    # shift the mask and apply to the loss 
+    shift_mask = (mask[..., 1:]).contiguous() # (batch_size, context_window)
+    masked_losses = shift_losses * shift_mask
+    sum_loss = masked_losses.sum(dim=1)
+    avg_loss = sum_loss / shift_mask.sum(dim=1)
+    pred_norm = avg_loss.argmin().item()
+    return pred_norm
+
+
 
 log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
@@ -146,8 +167,22 @@ for step in range(train_steps):
             decoded = enc.decode(tokens)
             print(f'rank {ddp_rank} sample {i} : {decoded}')
 
-
-
+    # Once in a while do a hella swag evaluation
+    if (step % 5000 == 0 or last_step):
+        num_total = 0.
+        num_correct_norm = 0.
+        if master_process: 
+            for example in iterate_examples('val'):
+                    tokens, mask, label = render_example(example)
+                    tokens = tokens.to(device)
+                    mask = mask.to(device)
+                    with torch.no_grad():
+                        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                            logits, _ = model(tokens)
+                    pred_norm = get_most_likely_row(tokens, mask, logits)
+                    num_total += 1 
+                    num_correct_norm += int(pred_norm == label)
+            print(f"Hellaswag accuracy: {num_correct_norm / num_total}")
 
     # Zero the grads before the forward pass
     optimizer.zero_grad()
