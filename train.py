@@ -8,8 +8,14 @@ import time
 import math
 import os
 
-ddp = int(os.environ.get('RANK', -1)) != -1
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)
+log_file =os.path.join(log_dir,"log.txt")
+#open file to clear
+with open(log_file, 'w') as f:  
+    pass
 
+ddp = int(os.environ.get('RANK', -1)) != -1
 if ddp:
     assert torch.cuda.is_available(), "CUDA is needed for DDP"
     init_process_group(backend="nccl")
@@ -27,11 +33,11 @@ else:
     master_process = True
     device = 'cpu'
     if torch.cuda.is_available():
-        device = 'gpu'
+        device = 'cuda'
     print('Using device: ', device)
 
-warmup_steps = 10
-max_steps = 50
+warmup_steps = 715
+max_steps = 19053
 max_lr = 6e-4
 min_lr = max_lr * 0.1
 
@@ -53,7 +59,7 @@ if torch.cuda.is_available():
 total_batch_size = 2**19
 batch_size = 4 
 context_size = 1024
-assert total_batch_size % ( batch_size * context_size * ddp_world_size) 
+assert (total_batch_size % ( batch_size * context_size * ddp_world_size))== 0
 grad_accum_steps = total_batch_size // (batch_size * context_size * ddp_world_size)   
 
 if master_process:
@@ -62,7 +68,8 @@ if master_process:
 
 
 # Import the data loader 
-train_loader = DataLoader(batch_size,context_size, process_rank=ddp_rank, num_processes=ddp_world_size)
+train_loader = DataLoader(batch_size,context_size, process_rank=ddp_rank, num_processes=ddp_world_size, split='train')
+val_loader = DataLoader(batch_size,context_size, process_rank=ddp_rank, num_processes=ddp_world_size, split='val')
 
 # Instantiate the Model
 model = GPT(GPTConfig)
@@ -72,10 +79,46 @@ if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
 # Optimize 
-train_steps = 19532 # 10 BTokens // total_batch_size
+train_steps = 19053 # 10 BTokens // total_batch_size
 optimizer = torch.optim.AdamW(model.parameters(),lr =3e-4, betas=(0.9, 0.95), eps=1e-8)
 for step in range(train_steps):
     t0 = time.time()
+    last_step = (step == max_steps - 1)
+
+    # Once in a while evaluate the loss 
+    if (step % 250 == 0 or last_step):
+        model.eval()
+        val_loader.reset()
+        with torch.no_grad():
+            val_loss_accum = 0.0
+            val_loss_steps = 20
+            for _ in range(val_loss_steps):
+                x, y = val_loader.next_batch()
+                x, y = x.to(device), y.to(device)
+                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                    logits, loss = model(x, y)
+                loss = loss / val_loss_steps
+                val_loss_accum += loss.detach()
+            if ddp: 
+                dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
+            if master_process: 
+                print(f'Validation loss: {val_loss_accum.item():4f}')
+                with open(log_file, 'a') as f:
+                    f.write(f'{step} val {val_loss_accum.item():4f}')
+                # optionally save the model
+                if (step % 5000 == 0 or last_step):
+                    checkpoint_path = os.path.join(log_dir, f'model_{step:05d}.pt')
+                    raw_model = model.module if ddp else model
+                    checkpoint = {
+                        'model': raw_model.state_dict(),
+                        'config': raw_model.config,
+                        'step': step,
+                        'val_loss': val_loss_accum.item(),
+                    }
+                    torch.save(checkpoint, checkpoint_path)
+            
+
+
     # Zero the grads before the forward pass
     optimizer.zero_grad()
     loss_accum = 0.0

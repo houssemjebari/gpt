@@ -44,6 +44,10 @@ class DataLoader:
         self.tokens = load_tokens(self.shards[self.current_shard])
         self.current_position = self.B * self.T * self.process_rank
 
+    def reset(self):
+        self.current_shard = 0
+        self.tokens = load_tokens(self.shards[self.current_shard])
+        self.current_position = self.B * self.T * self.process_rank    
 
     def next_batch(self):
         buf = self.tokens[self.current_position: self.current_position + self.B * self.T + 1]
