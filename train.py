@@ -7,6 +7,8 @@ import torch
 import time
 import math
 import os
+import tiktoken
+import torch.nn.functional as F
 
 log_dir = 'logs'
 os.makedirs(log_dir, exist_ok=True)
@@ -81,6 +83,7 @@ if ddp:
 # Optimize 
 train_steps = 19053 # 10 BTokens // total_batch_size
 optimizer = torch.optim.AdamW(model.parameters(),lr =3e-4, betas=(0.9, 0.95), eps=1e-8)
+enc = tiktoken.get_encoding('gpt2')
 for step in range(train_steps):
     t0 = time.time()
     last_step = (step == max_steps - 1)
@@ -116,7 +119,34 @@ for step in range(train_steps):
                         'val_loss': val_loss_accum.item(),
                     }
                     torch.save(checkpoint, checkpoint_path)
-            
+    
+    # Once in a while generate from the model
+    if (step % 1000 == 0 or last_step):
+        model.eval()
+        num_return_sequences = 4 
+        max_length = 32 
+        tokens = enc.encode("Hello I am a language model")
+        tokens = torch.tensor(tokens, dtype=torch.long)
+        tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)
+        xgen = tokens.to(device)
+        sample_rng = torch.Generator(device=device)
+        sample_rng.manual_seed(42 + ddp_rank)
+        while xgen.size(1) < max_length:
+            with torch.no_grad():
+                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                    logits, loss = model(x,y)
+                logits = logits[:,-1,:]
+                probs = F.softmax(logits, dim=-1)
+                topk_probs, topk_indices = torch.topk(probs, 50, dim=-1) # (B, 50), (B, 50)
+                ix = torch.multinomial(topk_probs, 1, generator=sample_rng) # (B, 1)
+                xcol = torch.gather(topk_indices, -1, ix) # (B,1)
+                xgen = torch.cat((xgen, xcol), dim=1)
+        for i in range(num_return_sequences):
+            tokens = xgen[i,:max_length].tolist()
+            decoded = enc.decode(tokens)
+            print(f'rank {ddp_rank} sample {i} : {decoded}')
+
+
 
 
     # Zero the grads before the forward pass
