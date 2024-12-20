@@ -30,7 +30,7 @@ def write_datafile(filename, tokens_np):
     np.save(filename, tokens_np)
 
 nprocs = max(1, os.cpu_count()//2)
-with mp.pool(nprocs) as pool:
+with mp.Pool(nprocs) as pool:
     shard_index = 0
     all_tokens_np = np.empty((shard_size, ), dtype=np.uint16)
     token_count = 0
