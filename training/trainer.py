@@ -17,6 +17,7 @@ class Trainer(Subject):
         self.observers = [] 
         self.train_steps = config.train_steps
         self.ddp = config.ddp
+        self.bfloat16 = config.bfloat16
 
     def attach(self, observer):
         self.observers.append(observer)
