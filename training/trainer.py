@@ -31,7 +31,7 @@ class Trainer(Subject):
     
     def train(self):
         for step in range(self.train_steps):
-            self.notify('on_train_start', {"step": step,
+            self.notify('on_step_start', {"step": step,
                                            "model": self.model})
             # Zero the grad before the forward pass 
             self.optimizer.zero_grad()  
@@ -60,7 +60,7 @@ class Trainer(Subject):
             self.optimizer.step()
             # Performance calculation and logging
             torch.cuda.synchronize()
-            self.notify('on_train_end: ', {"step": step,
+            self.notify('on_step_end: ', {"step": step,
                                         "model": self.model,
                                         "loss": loss})
         if self.ddp:
