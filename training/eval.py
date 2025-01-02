@@ -4,16 +4,15 @@ from utils.helper import get_autocast_context
 import torch.distributed as dist
 
 class Evaluator(Observer):
-    def __init__(self, rank, config):
+    def __init__(self, master, ddp, device, config):
         self.eval_interval = config.eval_interval
-        self.device = config.device
         self.use_bfloat16 = config.bfloat16
-        self.ddp = config.ddp
-        self.master = rank == 0
+        self.device = device
+        self.ddp = ddp
+        self.master = master
 
     def update(self, event_type, data):
-        if (event_type == 'on_step_end') and (data.step % self.eval_interval == 0):
-            
+        if (event_type == 'on_step_end') and (data["step"] % self.eval_interval == 0):
             model = data['model'] 
             val_loss_accum = 0.
             val_loss_steps = 20

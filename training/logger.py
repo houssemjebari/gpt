@@ -1,9 +1,9 @@
 from observer import Observer
 
 class Logger(Observer):
-    def __init__(self, log_file, rank):
+    def __init__(self, log_file, master):
         self.log_file = log_file
-        self.master = rank == 0
+        self.master = master
 
         with open(self.log_file, 'w') as f:
             pass 

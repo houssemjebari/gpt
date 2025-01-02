@@ -3,20 +3,20 @@ from subject import Subject
 import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
+from utils.helper import get_autocast_context
 
 
 class Trainer(Subject):
-    def __init__(self, model, optimizer, scheduler, train_loader, val_loader, config, device='cuda'):
+    def __init__(self, model, optimizer, scheduler, train_loader, ddp, config, device='cuda'):
         self.model = model 
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_loader = train_loader
-        self.val_loader = val_loader
         self.config = config 
         self.device = device
         self.observers = [] 
         self.train_steps = config.train_steps
-        self.ddp = config.ddp
+        self.ddp = ddp
         self.bfloat16 = config.bfloat16
 
     def attach(self, observer):
@@ -41,7 +41,12 @@ class Trainer(Subject):
                 x,y = self.train_loader.next_batch()
                 x, y = x.to(self.device), y.to(self.device)
                 # Compute the Forward pass 
-                with torch.autocast(device_type=self.device, dtype=torch.bfloat16):
+                autocast_ctx = get_autocast_context(
+                        device=self.device,
+                        use_autocast=self.bfloat16, 
+                        autocast_dtype=torch.bfloat16
+                    )  
+                with autocast_ctx:
                     logits, loss = self.model(x,y)
                 loss = loss / self.grad_accum_steps
                 loss_accum += loss.detach()
@@ -60,9 +65,10 @@ class Trainer(Subject):
             self.optimizer.step()
             # Performance calculation and logging
             torch.cuda.synchronize()
-            self.notify('on_step_end: ', {"step": step,
+            self.notify('on_step_end', {"step": step,
                                         "model": self.model,
-                                        "loss": loss})
+                                        "loss": loss,
+                                        "lr": lr})
         if self.ddp:
             destroy_process_group()
     
