@@ -4,7 +4,8 @@ from utils.helper import get_autocast_context
 from training.observer import Observer
 
 class Evaluator(Observer):
-    def __init__(self, master, ddp, device, config):
+    def __init__(self, val_loader, config, master, ddp, device):
+        self.val_loader = val_loader
         self.eval_interval = config.eval_interval
         self.use_bfloat16 = config.bfloat16
         self.device = device
@@ -16,13 +17,12 @@ class Evaluator(Observer):
             model = data['model'] 
             val_loss_accum = 0.
             val_loss_steps = 20
-            val_loader = data.val_loader 
             
             model.eval()
-            val_loader.reset()
+            self.val_loader.reset()
             with torch.no_grad():
                 for _ in range(val_loss_steps):
-                    x, y = val_loader.next_batch()
+                    x, y = self.val_loader.next_batch()
                     x, y = x.to(self.device), y.to(self.device)
                     autocast_ctx = get_autocast_context(
                         device=self.device,

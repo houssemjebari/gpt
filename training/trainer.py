@@ -7,7 +7,7 @@ from utils.helper import get_autocast_context
 
 
 class Trainer(Subject):
-    def __init__(self, model, optimizer, scheduler, train_loader, ddp, config, device='cuda'):
+    def __init__(self, model, optimizer, scheduler, train_loader, master_process, ddp, world_size, config, device='cuda'):
         self.model = model 
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -18,6 +18,11 @@ class Trainer(Subject):
         self.train_steps = config.train_steps
         self.ddp = ddp
         self.bfloat16 = config.bfloat16
+        self.grad_accum_steps = config.total_batch_size // (config.batch_size * config.context_size * world_size)   
+        if master_process:
+            print(f'total desired batch size: {config.total_batch_size}')
+            print(f'=> Calculated gradient accumulation_steps: {self.grad_accum_steps}')
+
 
     def attach(self, observer):
         self.observers.append(observer)
@@ -58,8 +63,8 @@ class Trainer(Subject):
             if self.ddp:
                 dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
             norm = torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
-            lr = self.scheduler.get_lr(step)
-            for param_group in self.optimizer.param_groups:
+            lrs = self.scheduler.get_lr()
+            for param_group, lr in zip(self.optimizer.param_groups, lrs):
                 param_group['lr'] = lr
             # Update the weights
             self.optimizer.step()
@@ -67,7 +72,7 @@ class Trainer(Subject):
             torch.cuda.synchronize()
             self.notify('on_step_end', {"step": step,
                                         "model": self.model,
-                                        "loss": loss,
+                                        "loss": loss_accum.item(),
                                         "lr": lr})
         if self.ddp:
             destroy_process_group()
