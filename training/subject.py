@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
 
 class Subject(ABC):
+    def __init__(self):
+        self.observers = [] 
 
-    @abstractmethod
     def attach(self, observer):
-        pass 
+        self.observers.append(observer)
 
-    @abstractmethod
     def detach(self, observer):
-        pass 
-
-    @abstractmethod
-    def notify(self, event_type:str, data: dict):
-        pass 
+        self.observers.remove(observer)
+    
+    def notify(self, event_type, data):
+        for observer in self.observers:
+            observer.update(event_type, data)
     

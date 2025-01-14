@@ -8,13 +8,13 @@ from utils.helper import get_autocast_context
 
 class Trainer(Subject):
     def __init__(self, model, optimizer, scheduler, train_loader, master_process, ddp, world_size, config, device='cuda'):
+        super().__init__()
         self.model = model 
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.train_loader = train_loader
         self.config = config 
         self.device = device
-        self.observers = [] 
         self.train_steps = config.train_steps
         self.ddp = ddp
         self.bfloat16 = config.bfloat16
@@ -22,17 +22,6 @@ class Trainer(Subject):
         if master_process:
             print(f'total desired batch size: {config.total_batch_size}')
             print(f'=> Calculated gradient accumulation_steps: {self.grad_accum_steps}')
-
-
-    def attach(self, observer):
-        self.observers.append(observer)
-
-    def detach(self, observer):
-        self.observers.remove(observer)
-    
-    def notify(self, event_type, data):
-        for observer in self.observers:
-            observer.update(event_type, data)
     
     def train(self):
         for step in range(self.train_steps):
