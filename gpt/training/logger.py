@@ -1,4 +1,4 @@
-from training.observer import Observer
+from gpt.training.observer import Observer
 
 class Logger(Observer):
     def __init__(self, log_file, master):

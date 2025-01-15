@@ -1,8 +1,10 @@
 import pytest 
-from training.eval import Evaluator
-from training.observer import Observer
+from gpt.training.eval import Evaluator
+from gpt.training.observer import Observer
 from torch import nn
 import torch
+
+
 
 class MockModel(nn.Module):
     def __init__(self):

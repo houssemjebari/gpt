@@ -1,5 +1,5 @@
-from  model import GPT, GPTConfig
-from data_loader import DataLoader
+from  gpt.model import GPT, GPTConfig
+from gpt.data_loader import DataLoader
 from torch.distributed import init_process_group, destroy_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
@@ -9,7 +9,7 @@ import math
 import os
 import tiktoken
 import torch.nn.functional as F
-from hellaswag import * 
+from gpt.hellaswag import * 
 
 
 def get_most_likely_row(tokens, mask, logits):

@@ -1,15 +1,15 @@
 import os 
 import torch 
-from configs.train_config import TrainConfig
-from configs.gpt_config import GPTConfig
-from configs.lr_config import LearningRateConfig
-from utils.distributed import init_distributed, cleanup_distributed
-from utils.cosine_scheduler import WarmupCosineScheduler
-from training.trainer import Trainer
-from training.logger import Logger
-from training.eval import Evaluator
-from model import GPT
-from data_loader import DataLoader
+from gpt.configs.train_config import TrainConfig
+from gpt.configs.gpt_config import GPTConfig
+from gpt.configs.lr_config import LearningRateConfig
+from gpt.utils.distributed import init_distributed, cleanup_distributed
+from gpt.utils.cosine_scheduler import WarmupCosineScheduler
+from gpt.training.trainer import Trainer
+from gpt.training.logger import Logger
+from gpt.training.eval import Evaluator
+from gpt.model import GPT
+from gpt.data_loader import DataLoader
 
 
 def main():

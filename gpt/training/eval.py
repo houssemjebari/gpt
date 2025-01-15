@@ -1,7 +1,7 @@
 import torch
 import torch.distributed as dist
-from utils.helper import get_autocast_context
-from training.observer import Observer
+from gpt.utils.helper import get_autocast_context
+from gpt.training.observer import Observer
 
 class Evaluator(Observer):
     def __init__(self, val_loader, config, master, ddp, device):

@@ -2,8 +2,8 @@
 import torch
 import torch.distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
-from training.subject import Subject
-from utils.helper import get_autocast_context
+from gpt.training.subject import Subject
+from gpt.utils.helper import get_autocast_context
 
 
 class Trainer(Subject):
