@@ -17,6 +17,11 @@ class MockObserver(Observer):
         self.events.append((event_type, data))
     
 def test_logger_writes_correctly(tmp_path):
+    '''
+    Test Objective:
+    - Ensure that the Logger correctly writes logs 
+    when notified
+    '''
     log_file = tmp_path / "test_log.txt"
     logger = Logger(log_file=str(log_file), master=True)
     # Create a mock event

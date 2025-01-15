@@ -30,6 +30,11 @@ class MockValLoader:
         pass
     
 def test_evaluator_prints_validation_loss(capfd):
+    '''
+    Test Objective: 
+    - Ensure that the Evaluator correctly computes 
+    and prints validation loss at specified intervals.
+    '''
     model = MockModel()
     model.eval() 
 

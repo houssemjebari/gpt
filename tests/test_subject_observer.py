@@ -20,6 +20,11 @@ class MockSubject(Subject):
         super().notify(event_type, data)
     
 def test_observer_receive_notification():
+    '''
+    Test Objective:
+    - Ensure that observers can attach and 
+    detach correctly.
+    '''
     subject = MockSubject()
     observer = MockObserver()
 
@@ -35,6 +40,11 @@ def test_observer_receive_notification():
     assert len(subject.observers) == 0
 
 def test_observer_receive_notification():
+    '''
+    Test Objective:
+    - Ensure that observers can receive
+    notifications correctly.
+    '''
     subject = MockSubject()
     observer = MockObserver()
     subject.attach(observer)
